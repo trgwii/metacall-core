@@ -31,7 +31,7 @@ extern "C" {
 
 /* -- Headers -- */
 
-#include <external-napi/node_api.h>
+#include <node_api.h>
 
 /* -- Methods -- */
 

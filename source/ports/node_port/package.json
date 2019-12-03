@@ -8,7 +8,7 @@
 	"main": "index.js",
 	"scripts": {
 		"preinstall": "node scripts/preinstall.js",
-		"test": "mocha"
+		"test": "mocha --timeout 30000"
 	},
 	"author": "Vicente Eduardo Ferrer Garcia <vic798@gmail.com> (https://metacall.io)",
 	"contributors": [

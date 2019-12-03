@@ -30,6 +30,7 @@
 #endif
 
 #include <node_loader/node_loader_impl.h>
+#include <node_loader/node_loader_impl_port.h> /* TODO: Refactor this with a proper design */
 
 #include <loader/loader_impl.h>
 
@@ -246,10 +247,6 @@ typedef struct loader_impl_async_future_delete_type
 
 } * loader_impl_async_future_delete;
 
-/* Exception */
-
-static inline void node_loader_impl_exception(napi_env env, napi_status status);
-
 /* Type conversion */
 static value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, napi_value v);
 
@@ -303,7 +300,17 @@ static void node_loader_impl_walk(uv_handle_t * handle, void * data);
 
 /* -- Methods -- */
 
-inline void node_loader_impl_exception(napi_env env, napi_status status)
+void * node_napi_to_value(napi_env env, napi_value v)
+{
+	return node_loader_impl_napi_to_value(NULL, env, v);
+}
+
+napi_value node_value_to_napi(napi_env env, void * arg)
+{
+	return node_loader_impl_value_to_napi(NULL, env, arg);
+}
+
+void node_exception(napi_env env, napi_status status)
 {
 	if (status != napi_ok)
 	{
@@ -337,11 +344,11 @@ inline void node_loader_impl_exception(napi_env env, napi_status status)
 
 			status = napi_get_and_clear_last_exception(env, &error);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			status = napi_is_error(env, error, &result);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			if (result == false)
 			{
@@ -351,11 +358,11 @@ inline void node_loader_impl_exception(napi_env env, napi_status status)
 
 			status = napi_get_named_property(env, error, "message", &message);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			status = napi_typeof(env, message, &valuetype);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			if (valuetype != napi_string)
 			{
@@ -365,7 +372,7 @@ inline void node_loader_impl_exception(napi_env env, napi_status status)
 
 			status = napi_get_value_string_utf8(env, message, NULL, 0, &length);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			str = static_cast<char *>(malloc(sizeof(char) * (length + 1)));
 
@@ -377,7 +384,7 @@ inline void node_loader_impl_exception(napi_env env, napi_status status)
 
 			status = napi_get_value_string_utf8(env, message, str, length + 1, &length);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			/* TODO: Notify MetaCall error handling system when it is implemented */
 			/* error_raise(str); */
@@ -395,7 +402,7 @@ value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, n
 
 	napi_status status = napi_typeof(env, v, &valuetype);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	if (valuetype == napi_undefined)
 	{
@@ -411,7 +418,7 @@ value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, n
 
 		status = napi_get_value_bool(env, v, &b);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		ret = value_create_bool((b == true) ? static_cast<boolean>(1) : static_cast<boolean>(0));
 	}
@@ -421,7 +428,7 @@ value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, n
 
 		status = napi_get_value_double(env, v, &d);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		ret = value_create_double(d);
 	}
@@ -431,7 +438,7 @@ value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, n
 
 		status = napi_get_value_string_utf8(env, v, NULL, 0, &length);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		ret = value_create_string(NULL, length);
 
@@ -441,7 +448,7 @@ value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, n
 
 			status = napi_get_value_string_utf8(env, v, str, length + 1, &length);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 		}
 	}
 	else if (valuetype == napi_symbol)
@@ -460,7 +467,7 @@ value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, n
 
 			status = napi_get_array_length(env, v, &length);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			ret = value_create_array(NULL, static_cast<size_t>(length));
 
@@ -472,7 +479,7 @@ value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, n
 
 				status = napi_get_element(env, v, iterator, &element);
 
-				node_loader_impl_exception(env, status);
+				node_exception(env, status);
 
 				/* TODO: Review recursion overflow */
 				array_value[iterator] = node_loader_impl_napi_to_value(node_impl, env, element);
@@ -526,7 +533,7 @@ value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, n
 
 			status = napi_create_reference(env, v, 1, &node_future->promise_ref);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 		}
 		else
 		{
@@ -539,11 +546,11 @@ value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, n
 
 			status = napi_get_property_names(env, v, &keys);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			status = napi_get_array_length(env, keys, &length);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			ret = value_create_map(NULL, static_cast<size_t>(length));
 
@@ -565,12 +572,12 @@ value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, n
 				/* Get key from object */
 				status = napi_get_element(env, keys, iterator, &key);
 
-				node_loader_impl_exception(env, status);
+				node_exception(env, status);
 
 				/* Set key string in the tupla */
 				status = napi_get_value_string_utf8(env, key, NULL, 0, &key_length);
 
-				node_loader_impl_exception(env, status);
+				node_exception(env, status);
 
 				tupla[0] = value_create_string(NULL, key_length);
 
@@ -582,11 +589,11 @@ value node_loader_impl_napi_to_value(loader_impl_node node_impl, napi_env env, n
 
 					status = napi_get_value_string_utf8(env, key, str, key_length + 1, &key_length);
 
-					node_loader_impl_exception(env, status);
+					node_exception(env, status);
 
 					status = napi_get_property(env, v, key, &element);
 
-					node_loader_impl_exception(env, status);
+					node_exception(env, status);
 
 					/* TODO: Review recursion overflow */
 					tupla[1] = node_loader_impl_napi_to_value(node_impl, env, element);
@@ -623,7 +630,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 
 		status = napi_get_boolean(env, (bool_value == 0) ? false : true, &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 	else if (id == TYPE_CHAR)
 	{
@@ -631,7 +638,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 
 		status = napi_create_int32(env, static_cast<int32_t>(char_value), &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 	else if (id == TYPE_SHORT)
 	{
@@ -639,7 +646,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 
 		status = napi_create_int32(env, static_cast<int32_t>(short_value), &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 	else if (id == TYPE_INT)
 	{
@@ -648,7 +655,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 		/* TODO: Check integer overflow */
 		status = napi_create_int32(env, static_cast<int32_t>(int_value), &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 	else if (id == TYPE_LONG)
 	{
@@ -657,7 +664,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 		/* TODO: Check integer overflow */
 		status = napi_create_int64(env, static_cast<int64_t>(long_value), &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 	else if (id == TYPE_FLOAT)
 	{
@@ -665,7 +672,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 
 		status = napi_create_double(env, static_cast<double>(float_value), &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 	else if (id == TYPE_DOUBLE)
 	{
@@ -673,7 +680,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 
 		status = napi_create_double(env, double_value, &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 	else if (id == TYPE_STRING)
 	{
@@ -683,7 +690,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 
 		status = napi_create_string_utf8(env, str_value, length, &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 	else if (id == TYPE_BUFFER)
 	{
@@ -693,7 +700,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 
 		status = napi_create_buffer(env, size, &buff_value, &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 	else if (id == TYPE_ARRAY)
 	{
@@ -705,7 +712,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 
 		status = napi_create_array_with_length(env, array_size, &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		for (iterator = 0; iterator < array_size; ++iterator)
 		{
@@ -714,7 +721,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 
 			status = napi_set_element(env, v, iterator, element_v);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 		}
 	}
 	else if (id == TYPE_MAP)
@@ -725,7 +732,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 
 		status = napi_create_object(env, &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		for (iterator = 0; iterator < map_size; ++iterator)
 		{
@@ -738,7 +745,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 
 			status = napi_set_named_property(env, v, key, element_v);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 		}
 	}
 	/* TODO */
@@ -756,7 +763,7 @@ napi_value node_loader_impl_value_to_napi(loader_impl_node node_impl, napi_env e
 	{
 		status = napi_get_undefined(env, &v);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 
 	return v;
@@ -995,7 +1002,7 @@ void node_loader_impl_async_initialize(uv_async_t * async)
 	/* Create scope */
 	status = napi_open_handle_scope(node_impl->env, &handle_scope);
 
-	node_loader_impl_exception(node_impl->env, status);
+	node_exception(node_impl->env, status);
 
 	/* Check if event loop is correctly initialized */
 	#if NODE_GET_EVENT_LOOP
@@ -1005,7 +1012,7 @@ void node_loader_impl_async_initialize(uv_async_t * async)
 		/* It is impossible to inject the event loop, so we must add an assert to verfy it */
 		status = napi_get_uv_event_loop(node_impl->env, &loop);
 
-		node_loader_impl_exception(node_impl->env, status);
+		node_exception(node_impl->env, status);
 
 		if (loop != node_impl->thread_loop)
 		{
@@ -1027,7 +1034,7 @@ void node_loader_impl_async_initialize(uv_async_t * async)
 	/* Close scope */
 	status = napi_close_handle_scope(node_impl->env, handle_scope);
 
-	node_loader_impl_exception(node_impl->env, status);
+	node_exception(node_impl->env, status);
 
 	/* Signal start condition */
 	uv_cond_signal(&node_impl->cond);
@@ -1073,7 +1080,7 @@ void node_loader_impl_async_func_call(uv_async_t * async)
 	/* Create scope */
 	napi_status status = napi_open_handle_scope(env, &handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Build parameters */
 	for (args_count = 0; args_count < args_size; ++args_count)
@@ -1087,18 +1094,18 @@ void node_loader_impl_async_func_call(uv_async_t * async)
 
 	status = napi_get_reference_value(env, node_func->func_ref, &function_ptr);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Call to function */
 	napi_value global, func_return;
 
 	status = napi_get_reference_value(env, async_data->node_impl->global_ref, &global);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	status = napi_call_function(env, global, function_ptr, args_size, node_func->argv, &func_return);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Convert function return to value */
 	async_data->ret = node_loader_impl_napi_to_value(async_data->node_impl, env, func_return);
@@ -1106,7 +1113,7 @@ void node_loader_impl_async_func_call(uv_async_t * async)
 	/* Close scope */
 	status = napi_close_handle_scope(env, handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Signal function call condition */
 	uv_cond_signal(&async_data->node_impl->cond);
@@ -1218,21 +1225,21 @@ void node_loader_impl_async_func_await(uv_async_t * async)
 	/* Create scope */
 	napi_status status = napi_open_handle_scope(env, &handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Get function table object from reference */
 	status = napi_get_reference_value(env, async_data->node_impl->function_table_object_ref, &function_table_object);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Retrieve resolve function from object table */
 	status = napi_create_string_utf8(env, await_str, sizeof(await_str) - 1, &await_str_value);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	status = napi_has_own_property(env, function_table_object, await_str_value, &result);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	if (result == true)
 	{
@@ -1240,11 +1247,11 @@ void node_loader_impl_async_func_await(uv_async_t * async)
 
 		status = napi_get_named_property(env, function_table_object, await_str, &function_await);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_typeof(env, function_await, &valuetype);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		if (valuetype != napi_function)
 		{
@@ -1272,19 +1279,19 @@ void node_loader_impl_async_func_await(uv_async_t * async)
 		/* Get function reference */
 		status = napi_get_reference_value(env, async_data->node_func->func_ref, &argv[0]);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Create array for arguments */
 		status = napi_create_array(env, &argv[1]);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Get push property from array */
 		napi_value push_func;
 
 		status = napi_get_named_property(env, argv[1], "push", &push_func);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Get function data */
 		s = function_signature(async_data->func);
@@ -1304,7 +1311,7 @@ void node_loader_impl_async_func_await(uv_async_t * async)
 			/* Push parameter to the array */
 			status = napi_call_function(env, argv[1], push_func, 1, &node_func->argv[args_count], NULL);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 		}
 
 		/* Set trampoline object values */
@@ -1318,27 +1325,27 @@ void node_loader_impl_async_func_await(uv_async_t * async)
 		/* Set the C trampoline object as JS wrapped object */
 		status = napi_create_object(env, &argv[2]);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_wrap(env, argv[2], static_cast<void *>(trampoline), &node_loader_impl_async_func_await_finalize, NULL, &trampoline_ref);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Call to function */
 		napi_value global, await_return;
 
 		status = napi_get_reference_value(env, async_data->node_impl->global_ref, &global);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_call_function(env, global, function_await, 3, argv, &await_return);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Delete references references to wrapped objects */
 		status = napi_delete_reference(env, trampoline_ref);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Proccess the await return */
 		async_data->ret = node_loader_impl_napi_to_value(async_data->node_impl, env, await_return);
@@ -1347,7 +1354,7 @@ void node_loader_impl_async_func_await(uv_async_t * async)
 	/* Close scope */
 	status = napi_close_handle_scope(env, handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Signal function destroy condition */
 	uv_cond_signal(&async_data->node_impl->cond);
@@ -1376,12 +1383,12 @@ void node_loader_impl_async_func_destroy(uv_async_t * async)
 	/* Create scope */
 	napi_status status = napi_open_handle_scope(env, &handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Clear function persistent reference */
 	status = napi_reference_unref(env, async_data->node_func->func_ref, &ref_count);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	if (ref_count != 0)
 	{
@@ -1390,12 +1397,12 @@ void node_loader_impl_async_func_destroy(uv_async_t * async)
 
 	status = napi_delete_reference(env, async_data->node_func->func_ref);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Close scope */
 	status = napi_close_handle_scope(env, handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Signal function destroy condition */
 	uv_cond_signal(&async_data->node_impl->cond);
@@ -1422,14 +1429,14 @@ void node_loader_impl_async_future_delete(uv_async_t * async)
 	/* Create scope */
 	napi_status status = napi_open_handle_scope(env, &handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Clear promise reference */
 	uint32_t ref_count = 0;
 
 	status = napi_reference_unref(env, async_data->node_future->promise_ref, &ref_count);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	if (ref_count != 0)
 	{
@@ -1438,12 +1445,12 @@ void node_loader_impl_async_future_delete(uv_async_t * async)
 
 	status = napi_delete_reference(env, async_data->node_future->promise_ref);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Close scope */
 	status = napi_close_handle_scope(env, handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Signal function destroy condition */
 	uv_cond_signal(&async_data->node_impl->cond);
@@ -1476,22 +1483,22 @@ void node_loader_impl_async_load_from_file(uv_async_t * async)
 	/* Create scope */
 	napi_status status = napi_open_handle_scope(env, &handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Get function table object from reference */
 	status = napi_get_reference_value(env, async_data->node_impl->function_table_object_ref, &function_table_object);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Create function string */
 	status = napi_create_string_utf8(env, load_from_file_str, sizeof(load_from_file_str) - 1, &load_from_file_str_value);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Check if exists in the table */
 	status = napi_has_own_property(env, function_table_object, load_from_file_str_value, &result);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	if (result == true)
 	{
@@ -1501,11 +1508,11 @@ void node_loader_impl_async_load_from_file(uv_async_t * async)
 
 		status = napi_get_named_property(env, function_table_object, load_from_file_str, &function_trampoline_load_from_file);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_typeof(env, function_trampoline_load_from_file, &valuetype);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		if (valuetype != napi_function)
 		{
@@ -1515,7 +1522,7 @@ void node_loader_impl_async_load_from_file(uv_async_t * async)
 		/* Define parameters */
 		status = napi_create_array_with_length(env, async_data->size, &argv[0]);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		for (size_t index = 0; index < async_data->size; ++index)
 		{
@@ -1525,11 +1532,11 @@ void node_loader_impl_async_load_from_file(uv_async_t * async)
 
 			status = napi_create_string_utf8(env, async_data->paths[index], length, &path_str);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			status = napi_set_element(env, argv[0], (uint32_t)index, path_str);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 		}
 
 		/* Call to load from file function */
@@ -1537,32 +1544,32 @@ void node_loader_impl_async_load_from_file(uv_async_t * async)
 
 		status = napi_get_reference_value(env, async_data->node_impl->global_ref, &global);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_call_function(env, global, function_trampoline_load_from_file, 1, argv, &return_value);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Check return value */
 		napi_valuetype return_valuetype;
 
 		status = napi_typeof(env, return_value, &return_valuetype);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		if (return_valuetype != napi_null)
 		{
 			/* Make handle persistent */
 			status = napi_create_reference(env, return_value, 1, &async_data->handle_ref);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 		}
 	}
 
 	/* Close scope */
 	status = napi_close_handle_scope(env, handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Signal load from file condition */
 	uv_cond_signal(&async_data->node_impl->cond);
@@ -1595,22 +1602,22 @@ void node_loader_impl_async_load_from_memory(uv_async_t * async)
 	/* Create scope */
 	napi_status status = napi_open_handle_scope(env, &handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Get function table object from reference */
 	status = napi_get_reference_value(env, async_data->node_impl->function_table_object_ref, &function_table_object);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Create function string */
 	status = napi_create_string_utf8(env, load_from_memory_str, sizeof(load_from_memory_str) - 1, &load_from_memory_str_value);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Check if exists in the table */
 	status = napi_has_own_property(env, function_table_object, load_from_memory_str_value, &result);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	if (result == true)
 	{
@@ -1620,11 +1627,11 @@ void node_loader_impl_async_load_from_memory(uv_async_t * async)
 
 		status = napi_get_named_property(env, function_table_object, load_from_memory_str, &function_trampoline_load_from_memory);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_typeof(env, function_trampoline_load_from_memory, &valuetype);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		if (valuetype != napi_function)
 		{
@@ -1634,47 +1641,47 @@ void node_loader_impl_async_load_from_memory(uv_async_t * async)
 		/* Define parameters */
 		status = napi_create_string_utf8(env, async_data->name, strlen(async_data->name), &argv[0]);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_create_string_utf8(env, async_data->buffer, async_data->size - 1, &argv[1]);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_create_object(env, &argv[2]);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Call to load from memory function */
 		napi_value global, return_value;
 
 		status = napi_get_reference_value(env, async_data->node_impl->global_ref, &global);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_call_function(env, global, function_trampoline_load_from_memory, 3, argv, &return_value);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Check return value */
 		napi_valuetype return_valuetype;
 
 		status = napi_typeof(env, return_value, &return_valuetype);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		if (return_valuetype != napi_null)
 		{
 			/* Make handle persistent */
 			status = napi_create_reference(env, return_value, 1, &async_data->handle_ref);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 		}
 	}
 
 	/* Close scope */
 	status = napi_close_handle_scope(env, handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Signal load from memory condition */
 	uv_cond_signal(&async_data->node_impl->cond);
@@ -1709,21 +1716,21 @@ void node_loader_impl_async_clear(uv_async_t * async)
 	/* Create scope */
 	napi_status status = napi_open_handle_scope(env, &handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 	/* Get function table object from reference */
 	status = napi_get_reference_value(env, async_data->node_impl->function_table_object_ref, &function_table_object);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Create function string */
 	status = napi_create_string_utf8(env, clear_str, sizeof(clear_str) - 1, &clear_str_value);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Check if exists in the table */
 	status = napi_has_own_property(env, function_table_object, clear_str_value, &result);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	if (result == true)
 	{
@@ -1733,11 +1740,11 @@ void node_loader_impl_async_clear(uv_async_t * async)
 
 		status = napi_get_named_property(env, function_table_object, clear_str, &function_trampoline_clear);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_typeof(env, function_trampoline_clear, &valuetype);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		if (valuetype != napi_function)
 		{
@@ -1747,24 +1754,24 @@ void node_loader_impl_async_clear(uv_async_t * async)
 		/* Define parameters */
 		status = napi_get_reference_value(env, async_data->handle_ref, &argv[0]);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Call to load from file function */
 		napi_value global, clear_return;
 
 		status = napi_get_reference_value(env, async_data->node_impl->global_ref, &global);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_call_function(env, global, function_trampoline_clear, 1, argv, &clear_return);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 
 	/* Clear handle persistent reference */
 	status = napi_reference_unref(env, async_data->handle_ref, &ref_count);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	if (ref_count != 0)
 	{
@@ -1773,12 +1780,12 @@ void node_loader_impl_async_clear(uv_async_t * async)
 
 	status = napi_delete_reference(env, async_data->handle_ref);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Close scope */
 	status = napi_close_handle_scope(env, handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Signal clear condition */
 	uv_cond_signal(&async_data->node_impl->cond);
@@ -1811,22 +1818,22 @@ void node_loader_impl_async_discover(uv_async_t * async)
 	/* Create scope */
 	napi_status status = napi_open_handle_scope(env, &handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Get function table object from reference */
 	status = napi_get_reference_value(env, async_data->node_impl->function_table_object_ref, &function_table_object);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Create function string */
 	status = napi_create_string_utf8(env, discover_str, sizeof(discover_str) - 1, &discover_str_value);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Check if exists in the table */
 	status = napi_has_own_property(env, function_table_object, discover_str_value, &result);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	if (result == true)
 	{
@@ -1836,11 +1843,11 @@ void node_loader_impl_async_discover(uv_async_t * async)
 
 		status = napi_get_named_property(env, function_table_object, discover_str, &function_trampoline_discover);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_typeof(env, function_trampoline_discover, &valuetype);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		if (valuetype != napi_function)
 		{
@@ -1850,18 +1857,18 @@ void node_loader_impl_async_discover(uv_async_t * async)
 		/* Define parameters */
 		status = napi_get_reference_value(env, async_data->handle_ref, &argv[0]);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Call to load from file function */
 		napi_value global, discover_map;
 
 		status = napi_get_reference_value(env, async_data->node_impl->global_ref, &global);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_call_function(env, global, function_trampoline_discover, 1, argv, &discover_map);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Convert return value (discover object) to context */
 		napi_value function_names;
@@ -1869,11 +1876,11 @@ void node_loader_impl_async_discover(uv_async_t * async)
 
 		status = napi_get_property_names(env, discover_map, &function_names);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_get_array_length(env, function_names, &function_names_length);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		for (uint32_t index = 0; index < function_names_length; ++index)
 		{
@@ -1883,11 +1890,11 @@ void node_loader_impl_async_discover(uv_async_t * async)
 
 			status = napi_get_element(env, function_names, index, &function_name);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			status = napi_get_value_string_utf8(env, function_name, NULL, 0, &function_name_length);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			if (function_name_length > 0)
 			{
@@ -1904,22 +1911,22 @@ void node_loader_impl_async_discover(uv_async_t * async)
 				/* Get function name */
 				status = napi_get_value_string_utf8(env, function_name, function_name_str, function_name_length + 1, &function_name_length);
 
-				node_loader_impl_exception(env, status);
+				node_exception(env, status);
 
 				/* Get function descriptor */
 				status = napi_get_named_property(env, discover_map, function_name_str, &function_descriptor);
 
-				node_loader_impl_exception(env, status);
+				node_exception(env, status);
 
 				/* Get function pointer */
 				status = napi_get_named_property(env, function_descriptor, "ptr", &function_ptr);
 
-				node_loader_impl_exception(env, status);
+				node_exception(env, status);
 
 				/* Check function pointer type */
 				status = napi_typeof(env, function_ptr, &valuetype);
 
-				node_loader_impl_exception(env, status);
+				node_exception(env, status);
 
 				if (valuetype != napi_function)
 				{
@@ -1929,12 +1936,12 @@ void node_loader_impl_async_discover(uv_async_t * async)
 				/* Get function signature */
 				status = napi_get_named_property(env, function_descriptor, "signature", &function_sig);
 
-				node_loader_impl_exception(env, status);
+				node_exception(env, status);
 
 				/* Check function pointer type */
 				status = napi_typeof(env, function_sig, &valuetype);
 
-				node_loader_impl_exception(env, status);
+				node_exception(env, status);
 
 				if (valuetype != napi_object)
 				{
@@ -1944,7 +1951,7 @@ void node_loader_impl_async_discover(uv_async_t * async)
 				/* Get signature length */
 				status = napi_get_array_length(env, function_sig, &function_sig_length);
 
-				node_loader_impl_exception(env, status);
+				node_exception(env, status);
 
 				/* Create node function */
 				loader_impl_node_function node_func = static_cast<loader_impl_node_function>(malloc(sizeof(struct loader_impl_node_function_type)));
@@ -1952,7 +1959,7 @@ void node_loader_impl_async_discover(uv_async_t * async)
 				/* Create reference to function pointer */
 				status = napi_create_reference(env, function_ptr, 1, &node_func->func_ref);
 
-				node_loader_impl_exception(env, status);
+				node_exception(env, status);
 
 				node_func->node_impl = async_data->node_impl;
 
@@ -1973,12 +1980,12 @@ void node_loader_impl_async_discover(uv_async_t * async)
 						/* Get signature parameter name */
 						status = napi_get_element(env, function_sig, arg_index, &parameter_name);
 
-						node_loader_impl_exception(env, status);
+						node_exception(env, status);
 
 						/* Get parameter name string length */
 						status = napi_get_value_string_utf8(env, parameter_name, NULL, 0, &parameter_name_length);
 
-						node_loader_impl_exception(env, status);
+						node_exception(env, status);
 
 						if (parameter_name_length > 0)
 						{
@@ -1988,7 +1995,7 @@ void node_loader_impl_async_discover(uv_async_t * async)
 						/* Get parameter name string */
 						status = napi_get_value_string_utf8(env, parameter_name, parameter_name_str, parameter_name_length + 1, &parameter_name_length);
 
-						node_loader_impl_exception(env, status);
+						node_exception(env, status);
 
 						signature_set(s, (size_t)arg_index, parameter_name_str, NULL);
 					}
@@ -2006,7 +2013,7 @@ void node_loader_impl_async_discover(uv_async_t * async)
 	/* Close scope */
 	status = napi_close_handle_scope(env, handle_scope);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Signal discover condition */
 	uv_cond_signal(&async_data->node_impl->cond);
@@ -2033,16 +2040,16 @@ void * node_loader_impl_register(void * node_impl_ptr, void * env_ptr, void * fu
 	/* Make global object persistent */
 	status = napi_get_global(env, &global);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	status = napi_create_reference(env, global, 1, &node_impl->global_ref);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	/* Make function table object persistent */
 	status = napi_create_reference(env, function_table_object, 1, &node_impl->function_table_object_ref);
 
-	node_loader_impl_exception(env, status);
+	node_exception(env, status);
 
 	#if (!defined(NDEBUG) || defined(DEBUG) || defined(_DEBUG) || defined(__DEBUG) || defined(__DEBUG__))
 	{
@@ -2054,11 +2061,11 @@ void * node_loader_impl_register(void * node_impl_ptr, void * env_ptr, void * fu
 		/* Retrieve test function from object table */
 		status = napi_create_string_utf8(env, test_str, sizeof(test_str) - 1, &test_str_value);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_has_own_property(env, function_table_object, test_str_value, &result);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		if (result == true)
 		{
@@ -2067,11 +2074,11 @@ void * node_loader_impl_register(void * node_impl_ptr, void * env_ptr, void * fu
 
 			status = napi_get_named_property(env, function_table_object, test_str, &function_trampoline_test);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			status = napi_typeof(env, function_trampoline_test, &valuetype);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			if (valuetype != napi_function)
 			{
@@ -2083,7 +2090,7 @@ void * node_loader_impl_register(void * node_impl_ptr, void * env_ptr, void * fu
 
 			status = napi_call_function(env, global, function_trampoline_test, 0, nullptr, &return_value);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 		}
 	}
 	#endif
@@ -2656,21 +2663,21 @@ void node_loader_impl_async_destroy(uv_async_t * async)
 		/* Create scope */
 		status = napi_open_handle_scope(node_impl->env, &handle_scope);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Get function table object from reference */
 		status = napi_get_reference_value(env, node_impl->function_table_object_ref, &function_table_object);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		/* Retrieve destroy function from object table */
 		status = napi_create_string_utf8(env, destroy_str, sizeof(destroy_str) - 1, &destroy_str_value);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		status = napi_has_own_property(env, function_table_object, destroy_str_value, &result);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 
 		if (result == true)
 		{
@@ -2679,11 +2686,11 @@ void node_loader_impl_async_destroy(uv_async_t * async)
 
 			status = napi_get_named_property(env, function_table_object, destroy_str, &function_trampoline_destroy);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			status = napi_typeof(env, function_trampoline_destroy, &valuetype);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			if (valuetype != napi_function)
 			{
@@ -2695,23 +2702,23 @@ void node_loader_impl_async_destroy(uv_async_t * async)
 
 			status = napi_get_global(env, &global);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 
 			status = napi_call_function(env, global, function_trampoline_destroy, 0, nullptr, &return_value);
 
-			node_loader_impl_exception(env, status);
+			node_exception(env, status);
 		}
 
 		/* Close scope */
 		status = napi_close_handle_scope(env, handle_scope);
 
-		node_loader_impl_exception(env, status);
+		node_exception(env, status);
 	}
 
 	/* Clear persistent references */
 	status = napi_reference_unref(node_impl->env, node_impl->global_ref, &ref_count);
 
-	node_loader_impl_exception(node_impl->env, status);
+	node_exception(node_impl->env, status);
 
 	if (ref_count != 0)
 	{
@@ -2720,11 +2727,11 @@ void node_loader_impl_async_destroy(uv_async_t * async)
 
 	status = napi_delete_reference(node_impl->env, node_impl->global_ref);
 
-	node_loader_impl_exception(node_impl->env, status);
+	node_exception(node_impl->env, status);
 
 	status = napi_reference_unref(node_impl->env, node_impl->function_table_object_ref, &ref_count);
 
-	node_loader_impl_exception(node_impl->env, status);
+	node_exception(node_impl->env, status);
 
 	if (ref_count != 0)
 	{
@@ -2733,7 +2740,7 @@ void node_loader_impl_async_destroy(uv_async_t * async)
 
 	status = napi_delete_reference(node_impl->env, node_impl->function_table_object_ref);
 
-	node_loader_impl_exception(node_impl->env, status);
+	node_exception(node_impl->env, status);
 
 	/* Destroy async objects */
 	uv_close(reinterpret_cast<uv_handle_t *>(&node_impl->async_destroy), NULL);

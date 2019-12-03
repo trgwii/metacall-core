@@ -153,7 +153,7 @@ target_include_directories(${target}
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 	${CMAKE_CURRENT_BINARY_DIR}/include
 
-	${NODE_ADDON_API_INCLUDE_DIR} # N-API wrappers
+	${NODE_ADDON_API_INCLUDE_DIR}/external-napi # N-API wrappers
 
 	PUBLIC
 	${DEFAULT_INCLUDE_DIRECTORIES}
@@ -171,6 +171,7 @@ target_include_directories(${target}
 target_link_libraries(${target}
 	PRIVATE
 	${META_PROJECT_NAME}::metacall_distributable # MetaCall Library
+	${META_PROJECT_NAME}::node_loader # MetaCall Node Loader
 
 	PUBLIC
 	${DEFAULT_LIBRARIES}

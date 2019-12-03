@@ -58,6 +58,7 @@ set(source_path  "${CMAKE_CURRENT_SOURCE_DIR}/source")
 set(headers
 	${include_path}/node_loader.h
 	${include_path}/node_loader_impl.h
+	${include_path}/node_loader_impl_port.h
 )
 
 set(sources
@@ -87,7 +88,9 @@ distributable_generate(${target} ${node_loader_unity_build}
 )
 
 # Build library
-add_library(${target} MODULE
+add_library(${target} # MODULE
+# TODO: This must be of type MODULE, but due to workaround for node port,
+# it has been disabled, enable it in the future after redesing the architecture
 	${node_loader_unity_build}
 	${sources}
 	${headers}
