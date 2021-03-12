@@ -3,8 +3,6 @@ import { readFileSync } from "fs";
 import * as Module from "module";
 import { EOL } from "os";
 import * as path from "path";
-/** Native node require(TypeScript) */
-import * as ts from "typescript";
 
 const patched_require = Module.prototype.require;
 const node_cache = (Module.prototype as any).node_cache || require.cache;
@@ -14,6 +12,8 @@ if ((Module.prototype as any).node_require) {
 	(Module.prototype as any).require = (Module.prototype as any).node_require;
 }
 
+/** Native node require(TypeScript) */
+import * as ts from "typescript";
 
 /** Patch metacall_require if present */
 if ((Module.prototype as any).node_require) {
@@ -125,8 +125,9 @@ const getMetacallExportTypes = (
 				metacallType.types = parameters.map((p) =>
 					c.typeToString(c.getTypeOfSymbolAtLocation(p, p.valueDeclaration))
 				);
-				metacallType.ret = c.typeToString(signature.getReturnType());
-				// TODO: figure out some nicer way to do this
+				const returnType = signature.getReturnType();
+				metacallType.ret = c.typeToString(returnType);
+				// TODO: investigate smarter way to do this
 				metacallType.async = metacallType.ret.startsWith("Promise<") &&
 					metacallType.ret.endsWith(">");
 			}
@@ -239,6 +240,22 @@ export const discover = safe(function discover(handle: Record<string, any>) {
 	return result;
 }, {});
 
+
+const trampoline = (process as any).binding('node_loader_trampoline_module');
+
+/** Await an async / promise-returning function */
+export const await_function = safe(function await_function(func: (...args: any[]) => PromiseLike<unknown>, args: any[], trampoline_ptr: anyF) {
+	return await_future(func(...args), trampoline_ptr);
+}, {});
+
+/** Await a Promise / Future type value */
+export const await_future = safe(function await_future(future: PromiseLike<unknown>, trampoline_ptr: anyF) {
+	return future.then(
+		x => trampoline.resolve(trampoline_ptr, x),
+		x => trampoline.reject(trampoline_ptr, x)
+	);
+}, {});
+
 /** Unimplemented */
 export const execution_path = noop;
 /** Unimplemented */
@@ -249,7 +266,3 @@ export const test = noop;
 export const initialize = noop;
 /** Unimplemented */
 export const destroy = noop;
-/** Unimplemented */
-export const await_function = noop;
-/** Unimplemented */
-export const await_future = noop;

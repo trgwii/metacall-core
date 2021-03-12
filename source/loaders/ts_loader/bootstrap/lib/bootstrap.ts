@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.await_future = exports.await_function = exports.destroy = exports.initialize = exports.test = exports.load_from_package = exports.execution_path = exports.discover = exports.clear = exports.load_from_memory = exports.load_from_file = void 0;
+exports.destroy = exports.initialize = exports.test = exports.load_from_package = exports.execution_path = exports.await_future = exports.await_function = exports.discover = exports.clear = exports.load_from_memory = exports.load_from_file = void 0;
 const fs_1 = require("fs");
 const Module = require("module");
 const os_1 = require("os");
 const path = require("path");
-/** Native node require(TypeScript) */
-const ts = require("typescript");
 const patched_require = Module.prototype.require;
 const node_cache = Module.prototype.node_cache || require.cache;
 /** Unpatch metacall_require if present */
 if (Module.prototype.node_require) {
     Module.prototype.require = Module.prototype.node_require;
+}
+/** Native node require(TypeScript) */
 const ts = Module.prototype.require(path.join(__dirname, "node_modules", "typescript"));
 /** Patch metacall_require if present */
 if (Module.prototype.node_require) {
@@ -38,7 +38,7 @@ const safe = (f, def) => (...args) => {
 };
 const wrapFunctionExport = (e) => typeof e === "function" ? { [e.name]: e } : e;
 const defaultCompilerOptions = {
-    target: ts.ScriptTarget.ES2019,
+    target: ts.ScriptTarget.ES2017,
     module: ts.ModuleKind.CommonJS,
 };
 const getCompilerOptions = () => {
@@ -82,8 +82,9 @@ const getMetacallExportTypes = (p, cb = () => { }) => {
                 const parameters = signature.getParameters();
                 metacallType.signature = parameters.map((p) => p.name);
                 metacallType.types = parameters.map((p) => c.typeToString(c.getTypeOfSymbolAtLocation(p, p.valueDeclaration)));
-                metacallType.ret = c.typeToString(signature.getReturnType());
-                // TODO: figure out some nicer way to do this
+                const returnType = signature.getReturnType();
+                metacallType.ret = c.typeToString(returnType);
+                // TODO: investigate smarter way to do this
                 metacallType.async = metacallType.ret.startsWith("Promise<") &&
                     metacallType.ret.endsWith(">");
             }
@@ -105,11 +106,8 @@ exports.load_from_file = safe(function load_from_file(paths) {
             for (const [name, handle] of Object.entries(exportTypes)) {
                 handle.ptr = wrappedExports[name];
             }
-            discoverTypes.set(fileName, {
-                ...((_a = discoverTypes.get(fileName)) !== null && _a !== void 0 ? _a : {}),
-                ...exportTypes,
-            });
-            result[fileName] = { __esModule: true, ...wrappedExports };
+            discoverTypes.set(fileName, Object.assign(Object.assign({}, ((_a = discoverTypes.get(fileName)) !== null && _a !== void 0 ? _a : {})), exportTypes));
+            result[fileName] = Object.assign({ __esModule: true }, wrappedExports);
         });
     });
     return result;
@@ -120,7 +118,7 @@ exports.load_from_memory = safe(function load_from_memory(name, data) {
     const compilerOptions = getCompilerOptions();
     const transpileOutput = ts.transpileModule(data, { compilerOptions });
     const extName = `${name}.ts`;
-    const target = (_a = compilerOptions.target) !== null && _a !== void 0 ? _a : ts.ScriptTarget.ES2019;
+    const target = (_a = compilerOptions.target) !== null && _a !== void 0 ? _a : defaultCompilerOptions.target;
     const p = ts.createProgram([extName], getCompilerOptions(), {
         fileExists: (fileName) => fileName === extName,
         getCanonicalFileName: (fileName) => fileName,
@@ -168,8 +166,17 @@ exports.clear = safe(function clear(handle) {
 /** Returns type information about exported functions from a given handle */
 exports.discover = safe(function discover(handle) {
     const result = Object.keys(handle)
-        .reduce((acc, k) => { var _a; return ({ ...acc, ...(_a = discoverTypes.get(k)) !== null && _a !== void 0 ? _a : {} }); }, {});
+        .reduce((acc, k) => { var _a; return (Object.assign(Object.assign({}, acc), (_a = discoverTypes.get(k)) !== null && _a !== void 0 ? _a : {})); }, {});
     return result;
+}, {});
+const trampoline = process.binding('node_loader_trampoline_module');
+/** Await an async / promise-returning function */
+exports.await_function = safe(function await_function(func, args, trampoline_ptr) {
+    return exports.await_future(func(...args), trampoline_ptr);
+}, {});
+/** Await a Promise / Future type value */
+exports.await_future = safe(function await_future(future, trampoline_ptr) {
+    return future.then(x => trampoline.resolve(trampoline_ptr, x), x => trampoline.reject(trampoline_ptr, x));
 }, {});
 /** Unimplemented */
 exports.execution_path = noop;
@@ -181,7 +188,3 @@ exports.test = noop;
 exports.initialize = noop;
 /** Unimplemented */
 exports.destroy = noop;
-/** Unimplemented */
-exports.await_function = noop;
-/** Unimplemented */
-exports.await_future = noop;
