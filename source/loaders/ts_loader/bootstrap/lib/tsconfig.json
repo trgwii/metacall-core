@@ -2,7 +2,8 @@
 	"compilerOptions": {
 		"strict": true,
 		"target": "ES2017",
-		"module": "CommonJS"
+		"module": "CommonJS",
+		"outDir": "./build"
 	},
-	"include": ["./bootstrap_src.ts"]
+	"include": ["bootstrap.ts"]
 }

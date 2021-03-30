@@ -8,7 +8,7 @@ const {
 	load_from_memory,
 	load_from_file,
 	destroy,
-} = require('./bootstrap.ts');
+} = require('../build/bootstrap.js');
 
 // Tests
 initialize();
